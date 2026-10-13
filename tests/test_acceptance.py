@@ -48,15 +48,16 @@ def _unit(army, name):
 
 
 def test_law_defensive_strat_reduces_scythe_damage(salamanders):
-    """-1 AP stratagem: armor 3+ tank saves 4+ -> 3+ vs scythes (fail 4/6 -> 3/6).
-    Damage drops ~25%% analytically; saturation near 12W compresses it further."""
-    valiant = _unit(salamanders, "Gladiator Valiant")
+    """-1 AP stratagem vs the 16W Land Raider (no saturation): armor 2+
+    saves 4+ -> 3+ vs scythes (fail 3/6 -> 2/6), so damage drops to ~2/3
+    and the kill chance collapses."""
+    raider = _unit(salamanders, "Land Raider Redeemer")
     shrouds = shrouds_unit(6, with_lord=True)
-    melee = _volley(shrouds, valiant, Scenario(phase="melee"))[0]
+    base_w, _, base_p = _volley(shrouds, raider, Scenario(phase="melee"))
     strat = Scenario(phase="melee", defender_strat_minus1ap=True)
-    melee_strat = _volley(shrouds, valiant, strat)[0]
-    assert melee_strat < melee
-    assert 0.6 < melee_strat / melee < 0.95
+    strat_w, _, strat_p = _volley(shrouds, raider, strat)
+    assert strat_w == pytest.approx(base_w * 2 / 3, abs=0.6)
+    assert strat_p < base_p / 3
 
 
 def test_law_scythe_charge_kills_unprotected_tank(salamanders):
@@ -65,11 +66,12 @@ def test_law_scythe_charge_kills_unprotected_tank(salamanders):
     valiant = _unit(salamanders, "Gladiator Valiant")
     shrouds = shrouds_unit(6, with_lord=True)
     wounds, _slain, p_destroy = _volley(shrouds, valiant, Scenario(phase="melee"))
-    # 29 dice (6x4 strike + lord 5), WS 2+, lethal hits, wound 5+ (BSData
-    # Manreaper has NO Lance; our hand session assumed it - see progress.md),
-    # save fail 4/6: measured P(destroy) ~0.77 on 12W.
+    # 29 dice (6x4 strike + lord 5), WS 2+, lethal hits, wound 4+ on T10:
+    # the attached Lord of Contagion grants LANCE to the unit's scythes
+    # (user-confirmed ruling; bare Deathshrouds have no Lance).
+    # Measured P(destroy) ~0.93 on 12W.
     assert wounds > 10
-    assert p_destroy > 0.7
+    assert p_destroy > 0.85
 
 
 def test_law_tank_falls_to_shrouds_even_with_stratagem(salamanders):
@@ -77,8 +79,8 @@ def test_law_tank_falls_to_shrouds_even_with_stratagem(salamanders):
     shrouds = shrouds_unit(6, with_lord=True)
     strat = Scenario(phase="melee", defender_strat_minus1ap=True)
     _, _, p_destroy = _volley(shrouds, valiant, strat)
-    # measured ~0.47: high but no longer overwhelming
-    assert 0.25 < p_destroy < 0.6
+    # with the LANCE aura, measured ~0.70: the stratagem no longer saves the tank
+    assert 0.5 < p_destroy < 0.85
 
 
 # --- Закон 2: имперская техника без инвула — худшая цель для AP−2, инферны — расходник ---

@@ -56,6 +56,15 @@ def manreaper() -> WeaponProfile:
     )
 
 
+def _with_lance(weapon: WeaponProfile) -> WeaponProfile:
+    """The attached Lord of Contagion grants [LANCE] to the unit's melee
+    weapons (user-confirmed ruling); bare Deathshrouds have no Lance."""
+    cloned = weapon.model_copy(deep=True)
+    for mode in cloned.modes:
+        mode.keywords = [*mode.keywords, "Lance"]
+    return cloned
+
+
 def shrouds_unit(count: int = 6, with_lord: bool = True) -> CombatUnit:
     models = [
         model(
@@ -86,6 +95,8 @@ def shrouds_unit(count: int = 6, with_lord: bool = True) -> CombatUnit:
         )
     ]
     if with_lord:
+        # LANCE aura from the lord covers the whole attached unit
+        models[0].weapons[1] = _with_lance(models[0].weapons[1])
         models.append(
             model(
                 "Lord of Contagion",
