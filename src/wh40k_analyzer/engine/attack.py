@@ -20,6 +20,7 @@ from __future__ import annotations
 import random
 import re
 from dataclasses import dataclass
+from dataclasses import replace as dc_replace
 
 from wh40k_analyzer.engine.dice import d6, failed_save_target, is_crit, passes, wound_target
 from wh40k_analyzer.model.army import CombatUnit, ModelProfile
@@ -41,6 +42,7 @@ class AttackContext:
     hit_mod: int = 0
     wound_mod: int = 0
     attacker_charged: bool = False  # LANCE weapons wound at +1 this turn
+    ranged_devastating_non_mv: bool = False  # Wrath of the Machine Spirit
 
 
 @dataclass(frozen=True)
@@ -54,6 +56,7 @@ class AttackDie:
     melta: int = 0  # +damage at half range
     lethal_hits: bool = False
     devastating_wounds: bool = False
+    devastating_only_non_mv: bool = False  # "non-Monster/Vehicle" condition
     sustained: int = 0
     sustained_only_non_mv: bool = False  # "non-Monster/Vehicle" condition
     twin_linked: bool = False  # re-roll failed wounds once
@@ -75,7 +78,12 @@ class AttackDie:
             damage=mode.damage or DiceExpr(sides=None, modifier=1),
             melta=melta_n or 0,
             lethal_hits=mode.has_keyword("Lethal Hits"),
-            devastating_wounds=mode.has_keyword("Devastating Wounds"),
+            devastating_wounds=mode.has_keyword("Devastating Wounds")
+            or _conditional_kw(mode.keywords, "Devastating Wounds"),
+            devastating_only_non_mv=any(
+                k.lower().startswith("devastating wounds") and "non-monster" in k.lower()
+                for k in mode.keywords
+            ),
             sustained=sustained_n or 0,
             sustained_only_non_mv=any(
                 k.lower().startswith("sustained hits") and "non-monster" in k.lower() for k in kw
@@ -86,6 +94,12 @@ class AttackDie:
             lance=mode.has_keyword("Lance"),
             is_melta_or_torrent=mode.has_keyword("Melta") or mode.has_keyword("Torrent"),
         )
+
+
+def _conditional_kw(keywords: list[str], name: str) -> bool:
+    """True for keywords like '<name>: <condition>' (e.g. DevW non-Monster/Vehicle)."""
+    lowered = name.lower()
+    return any(k.lower().startswith(lowered + ":") for k in keywords)
 
 
 def _parse_anti(keywords: list[str]) -> tuple[str | None, int | None]:
@@ -234,7 +248,10 @@ def _one_hit(
         crit_wound = is_crit(roll)
 
     # --- save ---
-    if crit_wound and atk.devastating_wounds:
+    devastating = atk.devastating_wounds and not (
+        atk.devastating_only_non_mv and target.is_monster_or_vehicle
+    )
+    if crit_wound and devastating:
         dmg = atk.damage.roll(rng)
         return DamageEvent(wounds=dmg, mortal=True)
 
@@ -330,6 +347,8 @@ def plan_volley(
                 modes = [_select_hunter_mode(modes, target)]
             for mode in modes:
                 die = AttackDie.from_mode(mode)
+                if ctx.ranged_devastating_non_mv:
+                    die = dc_replace(die, devastating_wounds=True, devastating_only_non_mv=True)
                 dice = _mode_dice(mode, model, weapon, target_models, ctx, rng)
                 out.append((die, dice))
     return out

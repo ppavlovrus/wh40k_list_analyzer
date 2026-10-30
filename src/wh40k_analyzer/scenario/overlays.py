@@ -24,6 +24,7 @@ class Scenario:
     forgefather_plus2s: bool = False  # Vulkan He'stan: +2S Melta/Torrent, 24"
     defender_strat_minus1ap: bool = False  # defensive stratagem: AP -1 incoming
     charged: bool = False  # melee context (charge bonuses hook in later)
+    wrath_of_machine_spirit: bool = False  # LR Redeemer: ranged DevW in 12" (non-MV)
 
     def context(self) -> AttackContext:
         return AttackContext(
@@ -34,6 +35,7 @@ class Scenario:
             ),
             ap_shift=1 if self.defender_strat_minus1ap else 0,
             attacker_charged=self.charged,
+            ranged_devastating_non_mv=self.wrath_of_machine_spirit and self.phase == "ranged",
         )
 
 

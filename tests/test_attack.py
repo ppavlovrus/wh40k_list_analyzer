@@ -8,6 +8,7 @@ sessions is exactly what these tests guard against).
 from __future__ import annotations
 
 import random
+from dataclasses import replace as dc_replace
 from typing import Any
 
 import pytest
@@ -189,7 +190,6 @@ def test_anti_keyword_threshold():
 
 
 def test_aura_s_bonuses():
-    from dataclasses import replace as dc_replace
 
     atk = dc_replace(die(S=5), is_melta_or_torrent=True)
     target = make_target(t=8)
@@ -368,3 +368,71 @@ def test_blast_dice_per_weapon_copy():
     plan = plan_volley(unit, "ranged", target, AttackContext(), random.Random(1))
     assert len(plan) == 1
     assert plan[0][1] == 16  # 2 cannons x (A4 + Blast2 x 2 brackets of 5)
+
+
+def test_conditional_devastating_wounds_keyword():
+    """'Devastating Wounds: non-Monster/Vehicle' (Redemptor gatling): mortal
+    wounds bypass saves vs infantry, do NOT apply vs vehicles."""
+    atk = dc_replace(
+        die(S=6, damage=DiceExpr(sides=None, modifier=2)),
+        devastating_wounds=True,
+        devastating_only_non_mv=True,
+    )
+    infantry = make_target(t=4, sv=3, keywords=["Infantry"])  # wound 3+
+    vehicle = make_target(t=8, sv=3, keywords=["Vehicle"])  # wound 5+
+    # infantry: hit 4/6, crit-wound 1/6 -> 2 MW bypassing the 3+ save,
+    # non-crit 3/6 must roll the save (fail 2/6)
+    got_i = mean_damage(atk, infantry, AttackContext())
+    assert got_i == pytest.approx(4 / 6 * (1 / 6 * 2 + 3 / 6 * 2 / 6 * 2), abs=0.01)
+    # vehicle: DevW off, plain chain, wound 5+
+    got_v = mean_damage(atk, vehicle, AttackContext())
+    assert got_v == pytest.approx(4 / 6 * 2 / 6 * 2 / 6 * 2, abs=0.01)
+
+
+def test_wrath_of_machine_spirit_context_flag():
+    """The plan-level context flag grants conditional DevW to ranged volleys
+    (Wrath of the Machine Spirit on the Land Raider Redeemer)."""
+    from wh40k_analyzer.engine.attack import Target, TargetGroup, plan_volley
+    from wh40k_analyzer.model.army import CombatUnit, ModelProfile
+    from wh40k_analyzer.model.weapons import WeaponMode, WeaponProfile
+
+    bolter = WeaponProfile(
+        name="Bolter",
+        kind="ranged",
+        modes=[
+            WeaponMode(
+                name="Bolter",
+                kind="ranged",
+                range_in=24,
+                attacks=DiceExpr(sides=None, modifier=1),
+                skill=3,
+                S=6,
+                AP=0,
+                damage=DiceExpr(sides=None, modifier=2),
+                keywords=[],
+            )
+        ],
+    )
+    unit = CombatUnit(
+        uid="tank",
+        name="Tank",
+        keywords=["Vehicle"],
+        models=[
+            ModelProfile(name="Tank", count=1, stats=StatsLine(T=12, Sv=2, W=16), weapons=[bolter])
+        ],
+    )
+    infantry = Target(
+        groups=[TargetGroup(stats=StatsLine(T=4, Sv=3, W=2), count=5)],
+        keywords=["Infantry"],
+    )
+    rng = random.Random(1)
+    plan_plain = plan_volley(unit, "ranged", infantry, AttackContext(), rng)
+    plan_wrath = plan_volley(
+        unit, "ranged", infantry, AttackContext(ranged_devastating_non_mv=True), rng
+    )
+    assert not plan_plain[0][0].devastating_wounds
+    die_wrath = plan_wrath[0][0]
+    assert die_wrath.devastating_wounds and die_wrath.devastating_only_non_mv
+    # numeric: wrath die vs infantry matches the conditional DevW expectation
+    got = mean_damage(die_wrath, infantry, AttackContext())
+    assert got == pytest.approx(4 / 6 * (1 / 6 * 2 + 3 / 6 * 2 / 6 * 2), abs=0.01)
