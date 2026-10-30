@@ -53,8 +53,8 @@ def test_law_defensive_strat_reduces_scythe_damage(salamanders):
     and the kill chance collapses."""
     raider = _unit(salamanders, "Land Raider Redeemer")
     shrouds = shrouds_unit(6, with_lord=True)
-    base_w, _, base_p = _volley(shrouds, raider, Scenario(phase="melee"))
-    strat = Scenario(phase="melee", defender_strat_minus1ap=True)
+    base_w, _, base_p = _volley(shrouds, raider, Scenario(phase="melee", charged=True))
+    strat = Scenario(phase="melee", charged=True, defender_strat_minus1ap=True)
     strat_w, _, strat_p = _volley(shrouds, raider, strat)
     assert strat_w == pytest.approx(base_w * 2 / 3, abs=0.6)
     assert strat_p < base_p / 3
@@ -65,10 +65,10 @@ def test_law_scythe_charge_kills_unprotected_tank(salamanders):
     under AP-2 becomes a 4+ save, ~26 unsaved D2/D3 wounds destroy it."""
     valiant = _unit(salamanders, "Gladiator Valiant")
     shrouds = shrouds_unit(6, with_lord=True)
-    wounds, _slain, p_destroy = _volley(shrouds, valiant, Scenario(phase="melee"))
+    wounds, _slain, p_destroy = _volley(shrouds, valiant, Scenario(phase="melee", charged=True))
     # 29 dice (6x4 strike + lord 5), WS 2+, lethal hits, wound 4+ on T10:
-    # the attached Lord of Contagion grants LANCE to the unit's scythes
-    # (user-confirmed ruling; bare Deathshrouds have no Lance).
+    # the attached Lord of Contagion grants LANCE to the unit's scythes,
+    # and 11e LANCE gives +1 to wound on the charge turn (roster rule text).
     # Measured P(destroy) ~0.93 on 12W.
     assert wounds > 10
     assert p_destroy > 0.85
@@ -77,7 +77,7 @@ def test_law_scythe_charge_kills_unprotected_tank(salamanders):
 def test_law_tank_falls_to_shrouds_even_with_stratagem(salamanders):
     valiant = _unit(salamanders, "Gladiator Valiant")
     shrouds = shrouds_unit(6, with_lord=True)
-    strat = Scenario(phase="melee", defender_strat_minus1ap=True)
+    strat = Scenario(phase="melee", charged=True, defender_strat_minus1ap=True)
     _, _, p_destroy = _volley(shrouds, valiant, strat)
     # with the LANCE aura, measured ~0.70: the stratagem no longer saves the tank
     assert 0.5 < p_destroy < 0.85

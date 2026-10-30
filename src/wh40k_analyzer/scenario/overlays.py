@@ -33,6 +33,7 @@ class Scenario:
                 2 if self.forgefather_plus2s and self.phase == "ranged" else 0
             ),
             ap_shift=1 if self.defender_strat_minus1ap else 0,
+            attacker_charged=self.charged,
         )
 
 
@@ -56,7 +57,15 @@ SCENARIOS: dict[str, tuple[Scenario, str]] = {
         Scenario(phase="ranged", half_range=True),
         "Стрельба с половинной дальности (Melta/Rapid Fire активны), без аур",
     ),
-    "melee": (Scenario(phase="melee"), "Мили, базовые профили"),
+    "melee": (Scenario(phase="melee"), "Мили, базовые профили, без чарджа"),
+    "melee_charge": (
+        Scenario(phase="melee", charged=True),
+        "Мили в ход чарджа (LANCE-оружие ранит на +1)",
+    ),
+    "melee_charge_defensive_strat": (
+        Scenario(phase="melee", charged=True, defender_strat_minus1ap=True),
+        "Мили в ход чарджа, у защитника стратагема −1 AP входящим",
+    ),
     "melee_defensive_strat": (
         Scenario(phase="melee", defender_strat_minus1ap=True),
         "Мили, у защитника стратагема −1 AP входящим",

@@ -40,6 +40,7 @@ class AttackContext:
     ap_shift: int = 0  # defensive stratagem: incoming AP magnitude reduced by 1
     hit_mod: int = 0
     wound_mod: int = 0
+    attacker_charged: bool = False  # LANCE weapons wound at +1 this turn
 
 
 @dataclass(frozen=True)
@@ -220,7 +221,7 @@ def _one_hit(
         t = wound_target(s_eff, target.majority_toughness)
         if atk.anti_keyword and atk.anti_threshold and target.has_keyword(atk.anti_keyword):
             t = min(t, atk.anti_threshold)
-        if atk.lance and target.is_monster_or_vehicle:
+        if atk.lance and ctx.attacker_charged:
             t = max(2, t - 1)
         roll = d6(rng)
         if not passes(roll, t, ctx.wound_mod):
@@ -325,6 +326,8 @@ def plan_volley(
                 continue
             if phase == "melee" and len(modes) > 1:
                 modes = [_best_melee_mode(modes, target)]
+            if phase == "ranged" and len(modes) > 1 and any("HUNTER:" in m.name for m in modes):
+                modes = [_select_hunter_mode(modes, target)]
             for mode in modes:
                 die = AttackDie.from_mode(mode)
                 dice = _mode_dice(mode, model, weapon, target_models, ctx, rng)
@@ -353,6 +356,19 @@ def _mode_dice(
     if extra_per_five and target_models >= 5:
         total += extra_per_five * (target_models // 5)
     return total
+
+
+def _select_hunter_mode(modes: list[WeaponMode], target: Target) -> WeaponMode:
+    """HUNTER:X/Y modes are alternative profiles of the same weapon: the
+    hunter profile replaces the base one against matching targets."""
+    hunter = next(m for m in modes if "HUNTER:" in m.name)
+    base = next((m for m in modes if "HUNTER:" not in m.name), hunter)
+    keywords = hunter.name.split("HUNTER:", 1)[1]
+    wanted = {k.strip().lower() for k in keywords.split("/")}
+    matches = any(
+        k.lower() == w or k.lower().endswith(f": {w}") for k in target.keywords for w in wanted
+    )
+    return hunter if matches else base
 
 
 def _best_melee_mode(modes: list[WeaponMode], target: Target) -> WeaponMode:

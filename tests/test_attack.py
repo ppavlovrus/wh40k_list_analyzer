@@ -188,15 +188,6 @@ def test_anti_keyword_threshold():
     assert got == pytest.approx(4 / 6 * 5 / 6, abs=0.01)
 
 
-def test_lance_vs_vehicle():
-    atk = die(S=8, AP=-2, lance=True, hit_target=3)
-    vehicle = make_target(t=12, keywords=["Vehicle"])  # 5+ -> 4+
-    infantry = make_target(t=12, keywords=["Infantry"])  # stays 5+
-    ctx = AttackContext()
-    assert mean_damage(atk, vehicle, ctx) == pytest.approx(4 / 6 * 3 / 6, abs=0.01)
-    assert mean_damage(atk, infantry, ctx) == pytest.approx(4 / 6 * 2 / 6, abs=0.01)
-
-
 def test_aura_s_bonuses():
     from dataclasses import replace as dc_replace
 
@@ -257,3 +248,81 @@ def test_mortal_batch_capped_to_one_model():
     result = allocate(events, make_target(t=4, w=2, count=3), random.Random(1))
     assert result.models_slain == 1
     assert result.wounds_lost == 2
+
+
+def test_lance_bonus_only_on_charge():
+    """11e LANCE rule (roster text): +1 to wound if the unit charged this
+    turn — NOT tied to Monster/Vehicle targets."""
+    atk = die(S=8, AP=-2, lance=True, hit_target=3)
+    infantry = make_target(t=10, keywords=["Infantry"])
+    vehicle = make_target(t=10, keywords=["Vehicle"])
+    ctx_plain = AttackContext()
+    ctx_charge = AttackContext(attacker_charged=True)
+    # uncharged: S8 vs T10 -> 5+, regardless of target type
+    assert mean_damage(atk, infantry, ctx_plain) == pytest.approx(4 / 6 * 2 / 6, abs=0.01)
+    assert mean_damage(atk, vehicle, ctx_plain) == pytest.approx(4 / 6 * 2 / 6, abs=0.01)
+    # charged: 4+ vs any target
+    assert mean_damage(atk, infantry, ctx_charge) == pytest.approx(4 / 6 * 3 / 6, abs=0.01)
+    assert mean_damage(atk, vehicle, ctx_charge) == pytest.approx(4 / 6 * 3 / 6, abs=0.01)
+
+
+def test_hunter_mode_selection():
+    """HUNTER:Monster/Vehicle is an alternative profile, not an extra shot:
+    one die per model, S12/BS2+ vs vehicles, S10/BS3+ vs everyone else."""
+    from wh40k_analyzer.engine.attack import Target, plan_volley
+    from wh40k_analyzer.model.army import CombatUnit, ModelProfile
+    from wh40k_analyzer.model.weapons import WeaponMode, WeaponProfile
+
+    rifle = WeaponProfile(
+        name="Melta rifle",
+        kind="ranged",
+        modes=[
+            WeaponMode(
+                name="Melta Rifle HUNTER:Monster/Vehicle",
+                kind="ranged",
+                range_in=18,
+                attacks=DiceExpr(sides=None, modifier=1),
+                skill=2,
+                S=12,
+                AP=-3,
+                damage=DiceExpr(sides=3, modifier=2),
+                keywords=["Melta 2"],
+            ),
+            WeaponMode(
+                name="Melta Rifle",
+                kind="ranged",
+                range_in=18,
+                attacks=DiceExpr(sides=None, modifier=1),
+                skill=3,
+                S=10,
+                AP=-3,
+                damage=DiceExpr(sides=3, modifier=2),
+                keywords=["Melta 2"],
+            ),
+        ],
+    )
+    unit = CombatUnit(
+        uid="erad",
+        name="Eradicator Squad",
+        keywords=["Infantry"],
+        models=[
+            ModelProfile(
+                name="Eradicator", count=3, stats=StatsLine(T=6, Sv=3, W=3), weapons=[rifle]
+            )
+        ],
+    )
+    rng = random.Random(1)
+    vehicle = Target(
+        groups=[TargetGroup(stats=StatsLine(T=10, Sv=3, W=12), count=1)],
+        keywords=["Vehicle"],
+    )
+    infantry = Target(
+        groups=[TargetGroup(stats=StatsLine(T=4, Sv=3, W=2), count=5)],
+        keywords=["Infantry"],
+    )
+    plan_v = plan_volley(unit, "ranged", vehicle, AttackContext(), rng)
+    plan_i = plan_volley(unit, "ranged", infantry, AttackContext(), rng)
+    assert len(plan_v) == 1 and len(plan_i) == 1  # no double fire
+    assert plan_v[0][0].S == 12 and plan_v[0][0].hit_target == 2
+    assert plan_i[0][0].S == 10 and plan_i[0][0].hit_target == 3
+    assert plan_v[0][1] == 3 and plan_i[0][1] == 3  # dice = 3 models x A1
