@@ -326,3 +326,45 @@ def test_hunter_mode_selection():
     assert plan_v[0][0].S == 12 and plan_v[0][0].hit_target == 2
     assert plan_i[0][0].S == 10 and plan_i[0][0].hit_target == 3
     assert plan_v[0][1] == 3 and plan_i[0][1] == 3  # dice = 3 models x A1
+
+
+def test_blast_dice_per_weapon_copy():
+    """Regression: a model with 2 copies of a Blast 2 weapon vs 10 targets
+    gathers 2x(4 + 2x2) = 16 dice, not 12 (per-cannon gather, not per entry)."""
+    from wh40k_analyzer.engine.attack import Target, plan_volley
+    from wh40k_analyzer.model.army import CombatUnit, ModelProfile
+    from wh40k_analyzer.model.weapons import WeaponMode, WeaponProfile
+
+    cannons = WeaponProfile(
+        name="Flamestorm Cannon",
+        kind="ranged",
+        multiplicity=2,
+        modes=[
+            WeaponMode(
+                name="Flamestorm Cannon",
+                kind="ranged",
+                range_in=12,
+                attacks=DiceExpr(sides=None, modifier=4),
+                skill=None,
+                S=6,
+                AP=-2,
+                damage=DiceExpr(sides=None, modifier=2),
+                keywords=["Blast 2", "Torrent"],
+            )
+        ],
+    )
+    unit = CombatUnit(
+        uid="lr",
+        name="Redeemer",
+        keywords=["Vehicle"],
+        models=[
+            ModelProfile(name="LR", count=1, stats=StatsLine(T=12, Sv=2, W=16), weapons=[cannons])
+        ],
+    )
+    target = Target(
+        groups=[TargetGroup(stats=StatsLine(T=6, Sv=2, W=4, invuln=4), count=10)],
+        keywords=["Infantry"],
+    )
+    plan = plan_volley(unit, "ranged", target, AttackContext(), random.Random(1))
+    assert len(plan) == 1
+    assert plan[0][1] == 16  # 2 cannons x (A4 + Blast2 x 2 brackets of 5)

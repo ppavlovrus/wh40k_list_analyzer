@@ -354,7 +354,8 @@ def _mode_dice(
     cleave = mode.keyword_value("Cleave") or (1 if mode.has_keyword("Cleave") else 0)
     extra_per_five = max(blast, cleave)
     if extra_per_five and target_models >= 5:
-        total += extra_per_five * (target_models // 5)
+        # Blast dice are gathered per weapon copy, not per weapon entry
+        total += weapon.multiplicity * extra_per_five * (target_models // 5)
     return total
 
 
