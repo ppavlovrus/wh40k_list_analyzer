@@ -1,5 +1,7 @@
 # wh40k_list_analyzer
 
+[![CI](https://github.com/ppavlovrus/wh40k_list_analyzer/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ppavlovrus/wh40k_list_analyzer/actions/workflows/ci.yml)
+
 Warhammer 40k (11th edition) army list analyzer. Loads two rosters exported
 from New Recruit (Battlescribe-family JSON), resolves attached units, and
 computes a mutual damage matrix with situational modifier overlays.
@@ -30,3 +32,7 @@ wh40k mcp          # stdio MCP server for ZCode/Claude integration
 
 MVP in development, see `progress.md`. All Warhammer 40,000 content is
 property of Games Workshop; this tool processes user-provided data files.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
